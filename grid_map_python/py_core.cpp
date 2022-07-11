@@ -62,7 +62,10 @@ void init_core(py::module m) {
     .def("setPosition",       &GridMap::setPosition, py::arg("position"))
     .def("move",              py::overload_cast<const Position&>(&GridMap::move), py::arg("position"))
     .def("addDataFrom",       &GridMap::addDataFrom, py::arg("other"), py::arg("extendMap"), py::arg("overwriteData"), py::arg("copyAllLayers"), py::arg("layers"))
-    .def("extendToInclude",   &GridMap::extendToInclude, py::arg("other"))
+    .def("getCoveringGeometry",  py::overload_cast<const Length&, const Position&, Length&, Position&>(&GridMap::getCoveringGeometry, py::const_), py::arg("otherLength"), py::arg("otherPosition"), py::arg("extendedMapLength"), py::arg("extendedMapPosition"))
+    .def("getCoveringGeometry",  py::overload_cast<const GridMap&, Length&, Position&>(&GridMap::getCoveringGeometry, py::const_), py::arg("other"), py::arg("extendedMapLength"), py::arg("extendedMapPosition"))
+    .def("copyToNewGeometry",    &GridMap::copyToNewGeometry, py::arg("newLength"), py::arg("newPosition"))
+    .def("extendToInclude",      py::overload_cast<const GridMap&>(&GridMap::extendToInclude), py::arg("other"))
     .def("clear",             &GridMap::clear, py::arg("layer"))
     .def("clearBasic",        &GridMap::clearBasic)
     .def("clearAll",          &GridMap::clearAll)
@@ -79,6 +82,7 @@ void init_core(py::module m) {
     .def("isDefaultStartIndex",        &GridMap::isDefaultStartIndex)
     .def("convertToDefaultStartIndex", &GridMap::convertToDefaultStartIndex)
     .def("getClosestPositionInMap",    &GridMap::getClosestPositionInMap, py::arg("position"))
+    .def_static("extendMultiToInclude",    &GridMap::extendMultiToInclude, py::arg("grids"))
 
     // Copy support
     .def("__copy__",  [](const GridMap& self) { return GridMap(self); })
