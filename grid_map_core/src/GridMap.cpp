@@ -11,6 +11,7 @@
 #include "grid_map_core/CubicInterpolation.hpp"
 #include "grid_map_core/GridMapMath.hpp"
 #include "grid_map_core/SubmapGeometry.hpp"
+#include "grid_map_core/Polygon.hpp"
 #include "grid_map_core/iterators/GridMapIterator.hpp"
 
 #include <Eigen/Dense>
@@ -550,17 +551,19 @@ bool GridMap::addDataFrom(const GridMap& other, bool extendMap, bool overwriteDa
   return true;
 }
 
-bool GridMap::extendToInclude(const GridMap& other) {
+bool GridMap::getCoveringGeometry(const Length& otherLength, const Position& otherPosition, Length& extendedMapLength, Position& extendedMapPosition) const {
   // Get dimension of maps.
   Position topLeftCorner(position_.x() + length_.x() / 2.0, position_.y() + length_.y() / 2.0);
   Position bottomRightCorner(position_.x() - length_.x() / 2.0, position_.y() - length_.y() / 2.0);
-  Position topLeftCornerOther(other.getPosition().x() + other.getLength().x() / 2.0, other.getPosition().y() + other.getLength().y() / 2.0);
-  Position bottomRightCornerOther(other.getPosition().x() - other.getLength().x() / 2.0,
-                                  other.getPosition().y() - other.getLength().y() / 2.0);
+  Position topLeftCornerOther(otherPosition.x() + otherLength.x() / 2.0, otherPosition.y() + otherLength.y() / 2.0);
+  Position bottomRightCornerOther(otherPosition.x() - otherLength.x() / 2.0,
+                                  otherPosition.y() - otherLength.y() / 2.0);
+
   // Check if map needs to be resized.
   bool resizeMap = false;
-  Position extendedMapPosition = position_;
-  Length extendedMapLength = length_;
+  extendedMapPosition = position_;
+  extendedMapLength = length_;
+
   if (topLeftCornerOther.x() > topLeftCorner.x()) {
     extendedMapPosition.x() += (topLeftCornerOther.x() - topLeftCorner.x()) / 2.0;
     extendedMapLength.x() += topLeftCornerOther.x() - topLeftCorner.x();
@@ -581,43 +584,114 @@ bool GridMap::extendToInclude(const GridMap& other) {
     extendedMapLength.y() += bottomRightCorner.y() - bottomRightCornerOther.y();
     resizeMap = true;
   }
-  // Resize map and copy data to new map.
-  if (resizeMap) {
-    GridMap mapCopy = *this;
-    setGeometry(extendedMapLength, resolution_, extendedMapPosition);
-    // Align new map with old one.
-    Vector shift = position_ - mapCopy.getPosition();
-    shift.x() = std::fmod(shift.x(), resolution_);
-    shift.y() = std::fmod(shift.y(), resolution_);
-    if (std::abs(shift.x()) < resolution_ / 2.0) {
-      position_.x() -= shift.x();
-    } else {
-      position_.x() += resolution_ - shift.x();
-    }
-    if (size_.x() % 2 != mapCopy.getSize().x() % 2) {
-      position_.x() += -std::copysign(resolution_ / 2.0, shift.x());
-    }
-    if (std::abs(shift.y()) < resolution_ / 2.0) {
-      position_.y() -= shift.y();
-    } else {
-      position_.y() += resolution_ - shift.y();
-    }
-    if (size_.y() % 2 != mapCopy.getSize().y() % 2) {
-      position_.y() += -std::copysign(resolution_ / 2.0, shift.y());
-    }
-    // Copy data.
-    for (GridMapIterator iterator(*this); !iterator.isPastEnd(); ++iterator) {
-      if (isValid(*iterator)) continue;
-      Position position;
-      getPosition(*iterator, position);
-      Index index;
-      if (!mapCopy.isInside(position)) continue;
-      mapCopy.getIndex(position, index);
-      for (const auto& layer : layers_) {
-        at(layer, *iterator) = mapCopy.at(layer, index);
-      }
+
+  return resizeMap;
+}
+
+bool GridMap::getCoveringGeometry(const GridMap& other, Length& extendedMapLength, Position& extendedMapPosition) const {
+  return getCoveringGeometry(other.getLength(), other.getPosition(), extendedMapLength, extendedMapPosition);
+}
+
+bool GridMap::copyToNewGeometry(const Length& newLength, const Position& newPosition) {
+  const GridMap mapCopy = *this;
+  setGeometry(newLength, resolution_, newPosition);
+
+  // Align new map with old one.
+  Vector shift = position_ - mapCopy.getPosition();
+  shift.x() = std::fmod(shift.x(), resolution_);
+  shift.y() = std::fmod(shift.y(), resolution_);
+
+  if (std::abs(shift.x()) < resolution_ / 2.0) {
+    position_.x() -= shift.x();
+  } else {
+    position_.x() += resolution_ - shift.x();
+  }
+
+  if (size_.x() % 2 != mapCopy.getSize().x() % 2) {
+    position_.x() += -std::copysign(resolution_ / 2.0, shift.x());
+  }
+
+  if (std::abs(shift.y()) < resolution_ / 2.0) {
+    position_.y() -= shift.y();
+  } else {
+    position_.y() += resolution_ - shift.y();
+  }
+
+  if (size_.y() % 2 != mapCopy.getSize().y() % 2) {
+    position_.y() += -std::copysign(resolution_ / 2.0, shift.y());
+  }
+
+  // Copy data.
+  for (GridMapIterator iterator(*this); !iterator.isPastEnd(); ++iterator) {
+    if (isValid(*iterator)) continue;
+    Position position;
+    getPosition(*iterator, position);
+    Index index;
+    if (!mapCopy.isInside(position)) continue;
+    mapCopy.getIndex(position, index);
+    for (const auto& layer : layers_) {
+      at(layer, *iterator) = mapCopy.at(layer, index);
     }
   }
+
+  return true;
+}
+
+bool GridMap::extendToInclude(const GridMap& other) {
+  Length extendedMapLength;
+  Position extendedMapPosition;
+  bool resizeMap = getCoveringGeometry(other, extendedMapLength, extendedMapPosition);
+
+  // Resize map and copy data to new map.
+  if (resizeMap) {
+    copyToNewGeometry(extendedMapLength, extendedMapPosition);
+  }
+
+  return true;
+}
+
+bool GridMap::extendToInclude(const Polygon& polygon) {
+  Length polygonLength, extendedMapLength;
+  Position polygonPosition, extendedMapPosition;
+  polygon.getBoundingBox(polygonPosition, polygonLength);
+
+  bool resizeMap = getCoveringGeometry(polygonLength, polygonPosition, extendedMapLength, extendedMapPosition);
+
+  // Resize map and copy data to new map.
+  if (resizeMap) {
+    copyToNewGeometry(extendedMapLength, extendedMapPosition);
+  }
+
+  return true;
+}
+
+bool GridMap::extendMultiToInclude(std::vector<GridMap*>& grids) {
+  if(grids.size()==0) return false;
+  if(grids.size()==1) return true;
+
+  Eigen::Array<double, 2, Eigen::Dynamic> corners(2, 2*grids.size());
+  for(size_t i=0; i<grids.size(); i++) {
+    corners.col(2*i+0) = grids[i]->getPosition().array() + grids[i]->getLength()/2;
+    corners.col(2*i+1) = grids[i]->getPosition().array() - grids[i]->getLength()/2;
+  }
+  const double resolution = grids[0]->getResolution();
+  const Position topLeft = corners.rowwise().maxCoeff();
+  const Position botRight = corners.rowwise().minCoeff();
+  const Position position = (topLeft + botRight) / 2;
+  const Length length = ((topLeft - botRight) / resolution).array().ceil() * resolution;
+
+  for(GridMap* grid : grids) {
+    const Vector shift = position.array() + length/2 - grid->getPosition().array() - grid->getLength()/2;
+    const Index shiftI = (shift / resolution).array().floor().cast<int>();
+
+    const GridMap copy (*grid);
+    grid->setGeometry(length, resolution, position);
+
+    for(const std::string& layer : grid->getLayers()) {
+      grid->get(layer).block(shiftI.x(), shiftI.y(), copy.getSize().x(), copy.getSize().y()) = copy.get(layer);
+    }
+  }
+
   return true;
 }
 

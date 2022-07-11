@@ -23,6 +23,7 @@
 namespace grid_map {
 
 class SubmapGeometry;
+class Polygon;
 
 /*!
  * Grid map managing multiple overlaying maps holding float values.
@@ -376,11 +377,52 @@ class GridMap {
                    std::vector<std::string> layers = std::vector<std::string>());
 
   /*!
+   * Computes the position and length that the grid map should have to fit the given position and length within itself.
+   * @param otherLength length of the grid map to fit.
+   * @param otherPosition position of the grid map to fit.
+   * @param extendedMapLength length that fits both the grid map and given position and length.
+   * @param extendedMapPosition position that fits both the grid map and given position and length.
+   * @return true if the grid length or position have changed.
+   */
+  bool getCoveringGeometry(const Length& otherLength, const Position& otherPosition, Length& extendedMapLength, Position& extendedMapPosition) const;
+
+  /*!
+   * Computes the position and length that the grid map should have to fit the given grid map within itself.
+   * @param other the grid map to fit.
+   * @param other the grid map to extend the size to.
+   * @param other the grid map to extend the size to.
+   * @return true if the grid length or position have changed.
+   */
+  bool getCoveringGeometry(const GridMap& other, Length& extendedMapLength, Position& extendedMapPosition) const;
+
+  /*!
+   * Copy the grid map into a new geometry.
+   * @param newLength length of the new geometry.
+   * @param newPosition position of the new geometry.
+   * @return true if successful.
+   */
+  bool copyToNewGeometry(const Length& newLength, const Position& newPosition);
+
+  /*!
    * Extends the size of the grip map such that the other grid map fits within.
    * @param other the grid map to extend the size to.
    * @return true if successful.
    */
   bool extendToInclude(const GridMap& other);
+
+  /*!
+   * Extends the size of the grip map such that the polygon fits within.
+   * @param polygon the polygon to extend the size to.
+   * @return true if successful.
+   */
+  bool extendToInclude(const Polygon& polygon);
+
+  /*!
+   * Extends the size of every grip maps such that fit within each other.
+   * @param grids list of grids to extend to.
+   * @return true if successful.
+   */
+  static bool extendMultiToInclude(std::vector<GridMap*>& grids);
 
   /*!
    * Clears all cells (set to NAN) for a layer.
