@@ -14,3 +14,7 @@ class GridMap(GridMapBinding):
 
 	def to_msg(self):
 		return to_msg(self)
+		
+	def from_OccupancyGrid(cls,map1):
+		return from_OccupancyGrid(map1, cls)
+
